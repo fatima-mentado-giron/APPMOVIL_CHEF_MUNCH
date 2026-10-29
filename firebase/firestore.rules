@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function admin() { return signed() && request.auth.token.get('admin', false) == true; }
+    function driver() { return signed() && request.auth.token.get('repartidor', false) == true; }
+    function owner(d) { return signed() && d.get('clienteUid', '') == request.auth.uid; }
+    function assigned(d) { return driver() && d.get('repartidorUid', '') == request.auth.uid; }
+    function readable(d) { return admin() || owner(d) || assigned(d); }
+    function validPoint(d) {
+      return (d.destinoLat == null && d.destinoLng == null) ||
+        (d.destinoLat is number && d.destinoLng is number && d.destinoLat >= -90 && d.destinoLat <= 90 && d.destinoLng >= -180 && d.destinoLng <= 180);
+    }
+    function validAssignment() {
+      let d = request.resource.data;
+      return !d.diff(resource.data).affectedKeys().hasAny(['repartidorUid']) ||
+        (d.repartidorUid is string && d.repartidorUid.size() > 0 &&
+         exists(/databases/$(database)/documents/repartidores/$(d.repartidorUid)) &&
+         get(/databases/$(database)/documents/repartidores/$(d.repartidorUid)).data.activo == true &&
+         resource.data.estado in ['PAGO_CONFIRMADO', 'EN_PREPARACION'] &&
+         resource.data.get('entregaEstado','SIN_ASIGNAR') in ['SIN_ASIGNAR','ASIGNADA','CANCELADA'] && d.entregaEstado == 'ASIGNADA');
+    }
+    function deliveryTransition() {
+      let a = resource.data.get('entregaEstado', 'SIN_ASIGNAR');
+      let d = request.resource.data;
+      return assigned(resource.data) &&
+        d.diff(resource.data).affectedKeys().hasOnly(['entregaEstado','estado']) &&
+        ((a in ['ASIGNADA','CANCELADA'] && resource.data.estado in ['PAGO_CONFIRMADO','EN_PREPARACION'] && d.entregaEstado == 'EN_CURSO' && d.estado == 'ENTREGADO_A_REPARTIDOR') ||
+         (a == 'EN_CURSO' && d.entregaEstado == 'ENTREGADA' && d.estado == 'ENTREGADO_A_CLIENTE') ||
+         (a == 'EN_CURSO' && d.entregaEstado == 'CANCELADA' && d.estado == 'EN_PREPARACION'));
+    }
+    match /pedidos/{id} {
+      allow read: if readable(resource.data);
+      allow create: if signed() && owner(request.resource.data) &&
+        request.resource.data.keys().hasOnly(['id','clienteUid','repartidorUid','entregaEstado','destinoLat','destinoLng','referencias','kitNombre','platillo','porciones','preferencias','direccion','fecha','horario','metodoPago','comprobanteUri','estado','fechaCreacion']) &&
+        request.resource.data.id == id && id.size() >= 20 &&
+        request.resource.data.repartidorUid == '' && request.resource.data.entregaEstado == 'SIN_ASIGNAR' &&
+        request.resource.data.direccion is string && request.resource.data.direccion.size() > 0 && request.resource.data.direccion.size() < 3000 &&
+        request.resource.data.referencias is string && request.resource.data.referencias.size() < 3000 &&
+        request.resource.data.kitNombre in ['Date Night','Family','Friends'] &&
+        request.resource.data.porciones is int && request.resource.data.porciones > 0 && request.resource.data.porciones <= 100 &&
+        validPoint(request.resource.data) &&
+        ((request.resource.data.metodoPago == 'Transferencia bancaria' && request.resource.data.estado == 'COMPROBANTE_ENVIADO' && request.resource.data.comprobanteUri is string && request.resource.data.comprobanteUri.size() > 0) ||
+         (request.resource.data.metodoPago == 'Pago al recibir' && request.resource.data.estado == 'PAGO_CONFIRMADO'));
+      allow update: if (admin() && validAssignment()) || deliveryTransition();
+      allow delete: if admin();
+      match /seguimiento/{fix} {
+        function pedido() { return get(/databases/$(database)/documents/pedidos/$(id)).data; }
+        function pedidoFinal() { return getAfter(/databases/$(database)/documents/pedidos/$(id)).data; }
+        allow read: if readable(pedido());
+        allow create, update: if fix == 'actual' && assigned(pedidoFinal()) && pedidoFinal().entregaEstado == 'EN_CURSO' &&
+          request.resource.data.keys().hasAll(['latitud','longitud','precision','actualizadoEn','medidoEn']) &&
+          request.resource.data.keys().hasOnly(['latitud','longitud','precision','actualizadoEn','medidoEn']) &&
+          request.resource.data.latitud is number && request.resource.data.latitud >= -90 && request.resource.data.latitud <= 90 &&
+          request.resource.data.longitud is number && request.resource.data.longitud >= -180 && request.resource.data.longitud <= 180 &&
+          request.resource.data.precision is number && request.resource.data.precision >= 0 && request.resource.data.precision <= 100000 &&
+          request.resource.data.actualizadoEn == request.time && request.resource.data.medidoEn is timestamp &&
+          request.resource.data.medidoEn >= request.time - duration.value(60,'s') && request.resource.data.medidoEn <= request.time + duration.value(10,'s');
+        allow delete: if admin();
+      }
+    }
+    match /configuracion/{id} {
+      allow read: if signed() && id == "pagos";
+      allow write: if false;
+    }
+    match /repartidores/{uid} {
+      allow read: if admin() || (driver() && request.auth.uid == uid);
+      // Provisioned with Admin SDK by trusted operators; no role assignment in mobile apps.
+      allow write: if false;
+    }
+    match /videos/{id} {
+      allow read: if admin() || (signed() && resource.data.publicado == true);
+      allow create, update: if admin() &&
+        request.resource.data.keys().hasOnly(['titulo','kit','url','storagePath','publicado','bytes','actualizadoEn']) &&
+        request.resource.data.titulo is string && request.resource.data.titulo.size() > 0 && request.resource.data.titulo.size() <= 200 &&
+        request.resource.data.kit in ['Date Night','Family','Friends'] && request.resource.data.publicado is bool &&
+        request.resource.data.url.matches('https://firebasestorage[.]googleapis[.]com/.*') &&
+        request.resource.data.storagePath.matches('videos/' + id + '/[^/]+') &&
+        request.resource.data.bytes is int && request.resource.data.bytes > 0 && request.resource.data.bytes <= 1073741824;
+      allow delete: if admin();
+    }
+  }
+}

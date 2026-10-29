@@ -1,0 +1,7 @@
+{
+  "indexes": [{
+    "collectionGroup": "videos", "queryScope": "COLLECTION",
+    "fields": [{"fieldPath":"kit","order":"ASCENDING"},{"fieldPath":"publicado","order":"ASCENDING"}]
+  }],
+  "fieldOverrides": [{"collectionGroup":"pedidos","fieldPath":"comprobanteUri","indexes":[]}]
+}
