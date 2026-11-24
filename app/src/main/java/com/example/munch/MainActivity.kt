@@ -1314,20 +1314,6 @@ private fun TarjetaInformacion(fondo: Color, contenido: @Composable ColumnScope.
 }
 
 @Composable
-private fun OpcionSeleccionable(texto: String, seleccionada: Boolean, alSeleccionar: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = alSeleccionar),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (seleccionada) Color(0xFFFBE1D5) else Color.White)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = texto, color = Texto, fontSize = 15.sp, fontWeight = if (seleccionada) FontWeight.Bold else FontWeight.Normal)
-            RadioButton(selected = seleccionada, onClick = alSeleccionar, colors = RadioButtonDefaults.colors(selectedColor = Coral))
-        }
-    }
-}
-
-@Composable
 private fun BotonVolver(alPulsar: () -> Unit) {
     TextButton(onClick = alPulsar) {
         Text(text = "‹ Volver", color = Verde, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -1506,84 +1492,6 @@ private fun PantallaDriver(
             }
         }
     }
-
-    if (pedidoChatActivo != null) {
-        val pedidoActual = pedidoChatActivo!!
-        var textoMensaje by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { pedidoChatActivo = null },
-            containerColor = Crema,
-            title = { Column { Text("Chat en vivo con cliente", fontWeight = FontWeight.Bold, color = Verde, fontSize = 18.sp); Text("Pedido #${pedidoActual.id}", fontSize = 13.sp, color = Texto.copy(alpha = 0.7f)) } },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth().height(340.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pedidoActual.chatMensajes.forEach { msg ->
-                        val esDriver = msg.remitente == "Driver"
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if (esDriver) Alignment.CenterEnd else Alignment.CenterStart) {
-                            Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = if (esDriver) Coral else Color.White), modifier = Modifier.widthIn(max = 260.dp)) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(text = "${msg.remitente} • ${msg.hora}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (esDriver) Color.White.copy(alpha = 0.8f) else Verde)
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(text = msg.texto, fontSize = 14.sp, color = if (esDriver) Color.White else Texto)
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text("Mensajes rápidos:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Verde)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Voy en camino", "Llegué al domicilio").forEach { autoMsg ->
-                            AssistChip(onClick = { val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()); pedidoActual.chatMensajes.add(MensajeChat("Driver", autoMsg, time)) }, label = { Text(autoMsg, fontSize = 11.sp) })
-                        }
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("¿Me ayudas con el timbre?", "A 5 minutos de entrega").forEach { autoMsg ->
-                            AssistChip(onClick = { val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()); pedidoActual.chatMensajes.add(MensajeChat("Driver", autoMsg, time)) }, label = { Text(autoMsg, fontSize = 11.sp) })
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = textoMensaje,
-                        onValueChange = { textoMensaje = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Escribe un mensaje...") },
-                        trailingIcon = {
-                            val speechLauncher = rememberLauncherForActivityResult(
-                                contract = ActivityResultContracts.StartActivityForResult()
-                            ) { result ->
-                                if (result.resultCode == Activity.RESULT_OK) {
-                                    val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                                    val spokenText = matches?.getOrNull(0)
-                                    if (!spokenText.isNullOrBlank()) {
-                                        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-                                        pedidoActual.chatMensajes.add(MensajeChat("Driver", spokenText, time))
-                                    }
-                                }
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = {
-                                    try {
-                                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-MX")
-                                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Habla tu mensaje de voz...")
-                                        }
-                                        speechLauncher.launch(intent)
-                                    } catch (_: Exception) {
-                                        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-                                        pedidoActual.chatMensajes.add(MensajeChat("Driver", "Hola, ya voy en camino.", time))
-                                    }
-                                }) { Text("Voz", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Verde) }
-                                IconButton(onClick = { if (textoMensaje.isNotBlank()) { val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()); pedidoActual.chatMensajes.add(MensajeChat("Driver", textoMensaje, time)); textoMensaje = "" } }) { Text("Enviar", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Coral) }
-                            }
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        maxLines = 2
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = { pedidoChatActivo = null }) { Text("Cerrar", color = Coral, fontWeight = FontWeight.Bold) } }
-        )
-    }
 }
 
 @Composable
@@ -1593,9 +1501,6 @@ private fun PantallaAdmin(
     pedidos: MutableList<Pedido>,
     alCerrarSesion: () -> Unit
 ) {
-    var adminTab by rememberSaveable { mutableStateOf("Pedidos") }
-    var mostrarDialogoNuevoKit by remember { mutableStateOf(false) }
-
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -1606,141 +1511,28 @@ private fun PantallaAdmin(
                 Text("Salir", color = Color.White, fontSize = 13.sp)
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Pedidos", "Menú", "Repartidores").forEach { tab ->
-                val seleccionado = adminTab == tab
-                OutlinedButton(onClick = { adminTab = tab }, shape = RoundedCornerShape(20.dp), colors = ButtonDefaults.outlinedButtonColors(containerColor = if (seleccionado) Coral else Color.Transparent, contentColor = if (seleccionado) Color.White else Texto), modifier = Modifier.weight(1f)) {
-                    Text(tab, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFFE2EAF4))) {
+                Column(modifier = Modifier.padding(16.dp)) { Text("Ventas", fontSize = 12.sp, color = Texto.copy(alpha = 0.7f)); Text("\$3,012 MXN", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Texto) }
+            }
+            Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFFE5ECD7))) {
+                Column(modifier = Modifier.padding(16.dp)) { Text("Total", fontSize = 12.sp, color = Texto.copy(alpha = 0.7f)); Text("${pedidos.size} Pedidos", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Verde) }
+            }
+        }
+        TituloSeccion("Listado de Pedidos y Comprobantes")
+        pedidos.forEach { pedido ->
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F0))) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(text = "ID: ${pedido.id}", fontWeight = FontWeight.Bold, color = Coral)
+                        Text(text = pedido.estado, fontWeight = FontWeight.SemiBold, color = Verde)
+                    }
+                    Text(text = "${pedido.kitNombre} - ${pedido.platillo}", fontWeight = FontWeight.Medium, color = Texto)
+                    Text(text = "Método de Pago: ${pedido.metodoPago}", fontSize = 13.sp, color = Texto.copy(alpha = 0.8f))
+                    if (pedido.preferencias.isNotBlank()) { Text(text = "Nota: ${pedido.preferencias}", fontSize = 13.sp, color = Coral) }
+                    Text(text = "Dir: ${pedido.direccion}", fontSize = 13.sp, color = Texto.copy(alpha = 0.8f))
                 }
             }
         }
-        Spacer(Modifier.height(4.dp))
-
-        when (adminTab) {
-            "Pedidos" -> {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFFE2EAF4))) {
-                        Column(modifier = Modifier.padding(16.dp)) { Text("Ventas", fontSize = 12.sp, color = Texto.copy(alpha = 0.7f)); Text("\$3,012 MXN", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Texto) }
-                    }
-                    Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = Color(0xFFE5ECD7))) {
-                        Column(modifier = Modifier.padding(16.dp)) { Text("Total", fontSize = 12.sp, color = Texto.copy(alpha = 0.7f)); Text("${pedidos.size} Pedidos", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Verde) }
-                    }
-                }
-                TituloSeccion("Listado de Pedidos y Comprobantes")
-                pedidos.forEach { pedido ->
-                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F0))) {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "ID: ${pedido.id}", fontWeight = FontWeight.Bold, color = Coral)
-                                Text(text = pedido.estado, fontWeight = FontWeight.SemiBold, color = Verde)
-                            }
-                            Text(text = "${pedido.kitNombre} - ${pedido.platillo}", fontWeight = FontWeight.Medium, color = Texto)
-                            Text(text = "Método de Pago: ${pedido.metodoPago}", fontSize = 13.sp, color = Texto.copy(alpha = 0.8f))
-
-                            if (pedido.metodoPago.contains("Transferencia")) {
-                                val estadoComprobante = if (pedido.comprobanteUri != null) "Comprobante adjuntado" else "Sin comprobante aún"
-                                Text(text = estadoComprobante, fontSize = 12.sp, color = Texto)
-
-                                if (pedido.comprobanteUri != null) {
-                                    if (pedido.pagoAutorizado) {
-                                        Text(text = "Pago autorizado por administración", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Verde)
-                                    } else {
-                                        Button(onClick = { pedido.pagoAutorizado = true }, colors = ButtonDefaults.buttonColors(containerColor = Verde), shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                                            Text("Autorizar pago de transferencia", fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            }
-                            if (pedido.preferencias.isNotBlank()) { Text(text = "Nota: ${pedido.preferencias}", fontSize = 13.sp, color = Coral) }
-                            Text(text = "Dir: ${pedido.direccion}", fontSize = 13.sp, color = Texto.copy(alpha = 0.8f))
-                        }
-                    }
-                }
-            }
-            "Menú" -> {
-                Button(onClick = { mostrarDialogoNuevoKit = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = Coral)) {
-                    Text("Agregar nuevo kit / platillo", fontWeight = FontWeight.Bold)
-                }
-
-                kits.forEachIndexed { index, kit ->
-                    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = kit.nombre, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Texto)
-                                Surface(shape = RoundedCornerShape(8.dp), color = if (kit.disponible) Color(0xFFE5ECD7) else Color(0xFFFBE1D5)) {
-                                    Text(text = if (kit.disponible) "Disponible" else "Pausado", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (kit.disponible) Verde else Coral)
-                                }
-                            }
-                            Text(text = kit.platillo, color = Texto.copy(alpha = 0.8f), fontSize = 14.sp)
-                            Text(text = "Precio: \$${kit.precio} MXN | ${kit.porcionesIniciales} personas | ${kit.minutos} min", fontSize = 13.sp, color = Verde)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { kit.disponible = !kit.disponible }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = if (kit.disponible) Coral else Verde)) {
-                                    Text(if (kit.disponible) "Pausar" else "Activar")
-                                }
-                                OutlinedButton(onClick = { kits.removeAt(index) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Coral)) {
-                                    Text("Eliminar")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "Repartidores" -> {
-                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFFE2EAF4))) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Repartidores activos", fontWeight = FontWeight.Bold, color = Texto)
-                        Text("• Carlos Rodríguez (Itálica 125cc • 45ABC) - Calificación: 5.0", fontSize = 13.sp, color = Texto.copy(alpha = 0.8f))
-                    }
-                }
-            }
-        }
-    }
-
-    if (mostrarDialogoNuevoKit) {
-        var nombreKit by remember { mutableStateOf("") }
-        var platilloKit by remember { mutableStateOf("") }
-        var precioKit by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoNuevoKit = false },
-            containerColor = Crema,
-            title = { Text("Agregar nuevo kit / platillo al menú", fontWeight = FontWeight.Bold, color = Verde) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(value = nombreKit, onValueChange = { nombreKit = it }, label = { Text("Nombre del kit") }, shape = RoundedCornerShape(12.dp))
-                    OutlinedTextField(value = platilloKit, onValueChange = { platilloKit = it }, label = { Text("Platillo") }, shape = RoundedCornerShape(12.dp))
-                    OutlinedTextField(value = precioKit, onValueChange = { precioKit = it }, label = { Text("Precio en MXN") }, shape = RoundedCornerShape(12.dp))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (nombreKit.isNotBlank() && platilloKit.isNotBlank()) {
-                        kits.add(
-                            Kit(
-                                nombre = nombreKit,
-                                subtitulo = "Especialidad del Chef",
-                                platillo = platilloKit,
-                                minutos = 20,
-                                personas = "2 personas",
-                                porcionesIniciales = 2,
-                                fondo = Color(0xFFFFEDC3),
-                                ingredientes = "Ingredientes frescos seleccionados.",
-                                utensilios = "Sartén y espátula.",
-                                videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                                disponible = true,
-                                precio = precioKit.toIntOrNull() ?: 380
-                            )
-                        )
-                        mostrarDialogoNuevoKit = false
-                    }
-                }) {
-                    Text("Agregar y publicar al catálogo", color = Coral, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoNuevoKit = false }) {
-                    Text("Cancelar", color = Verde, fontWeight = FontWeight.Bold)
-                }
-            }
-        )
     }
 }
